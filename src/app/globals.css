@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #FFFDF5;
+  --color-ink: #121212;
+  --color-primary-yellow: #FFE600;
+  --color-secondary-pink: #FF66C4;
+  --color-tertiary-cyan: #00D2FF;
+  --color-success-green: #00F090;
+  --color-surface: #FFFFFF;
+  --color-surface-dim: #F0EDEC;
+
+  --font-display: "Space Grotesk", sans-serif;
+  --font-sans: "Plus Jakarta Sans", sans-serif;
+
+  --shadow-brutal-sm: 2px 2px 0px #121212;
+  --shadow-brutal: 4px 4px 0px #121212;
+  --shadow-brutal-lg: 6px 6px 0px #121212;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+/* Neo-Brutalism Utilities */
+.border-brutal {
+  border: 3px solid #121212;
+}
+
+.border-brutal-sm {
+  border: 2px solid #121212;
+}
+
+.shadow-brutal {
+  box-shadow: 4px 4px 0px #121212;
+}
+
+.shadow-brutal-sm {
+  box-shadow: 2px 2px 0px #121212;
+}
+
+.shadow-brutal-lg {
+  box-shadow: 6px 6px 0px #121212;
+}
+
+/* Mechanical Button Press */
+.btn-brutal {
+  border: 3px solid #121212;
+  box-shadow: 4px 4px 0px #121212;
+  transition: transform 0.05s ease, box-shadow 0.05s ease;
+}
+
+.btn-brutal:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px #121212;
+}
+
+.btn-brutal:active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0px #121212;
+}
