@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { requireMember } from "@/lib/authz";
 import { db } from "@/lib/db";
-import { expenses, members, settlements } from "@/lib/db/schema";
+import { groups, expenses, members, settlements } from "@/lib/db/schema";
 import { computeBalances, settle } from "@/lib/split";
 import { RekapClientView } from "./rekap-client-view";
 
@@ -12,6 +12,10 @@ export default async function GroupOverviewPage({
 }) {
   const { id } = await params;
   const { member: currentMember } = await requireMember(id);
+
+  const group = await db.query.groups.findFirst({
+    where: eq(groups.id, id),
+  });
 
   // 1. Fetch active members
   const groupMembers = await db.query.members.findMany({
@@ -96,6 +100,7 @@ export default async function GroupOverviewPage({
   return (
     <RekapClientView
       groupId={id}
+      groupName={group?.name || "Grup Patungan"}
       currentMember={currentMember}
       members={groupMembers}
       expenses={activeExpenses}

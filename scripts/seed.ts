@@ -154,7 +154,7 @@ async function main() {
     const splitsToInsert = Object.entries(shares).map(([mId, amt]) => ({
       expenseId: exp.id,
       memberId: mId,
-      weight: (weights[mId] || 1).toFixed(2),
+      inputValue: (weights[mId] || 1).toFixed(2),
       shareAmount: amt,
     }));
 

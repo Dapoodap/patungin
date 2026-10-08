@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { PwaRegister } from "./pwa-register";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -14,10 +15,23 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   weight: ["400", "500", "600", "700"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#FFFDF5",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export const metadata: Metadata = {
-  title: "Patungin — Split Bill Adil & Transparan",
+  title: "Patungan — Split Bill Adil & Transparan",
   description:
     "Web app patungan split bill multi-user dengan neo-brutalist UI. Hitung saldo transparan, minimalkan transfer, tanpa drama.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Patungan",
+  },
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -40,6 +54,7 @@ export default function RootLayout({
     <html lang="id" className={`${spaceGrotesk.variable} ${plusJakartaSans.variable}`}>
       <body className="min-h-screen bg-[#FFFDF5] text-[#121212] antialiased">
         {children}
+        <PwaRegister />
       </body>
     </html>
   );

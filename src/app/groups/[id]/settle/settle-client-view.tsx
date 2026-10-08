@@ -10,6 +10,7 @@ import {
   rejectSettlement,
   recordDirectSettlement,
 } from "@/app/actions/settlement";
+import { triggerWhatsAppReminder } from "@/app/actions/reminder";
 
 interface Member {
   id: string;
@@ -205,6 +206,29 @@ export function SettleClientView({
       router.refresh();
     }
     setDirectSubmitting(false);
+  };
+
+  const handleSendReminder = async (transfer: Transfer) => {
+    setLoading(`remind-${transfer.from}-${transfer.to}`);
+    const fd = new FormData();
+    fd.set("groupId", groupId);
+    fd.set("toMemberId", transfer.from);
+    fd.set("amount", transfer.amount.toString());
+
+    const res = await triggerWhatsAppReminder(fd);
+    if (res.ok) {
+      window.open(res.data.waUrl, "_blank", "noopener,noreferrer");
+      setStatusMsg({
+        type: "success",
+        text: `Pengingat WhatsApp untuk ${memberNameMap[transfer.from]} telah dibuat dan dibuka. Status cooldown 24 jam telah dicatat.`,
+      });
+    } else {
+      setStatusMsg({
+        type: "error",
+        text: res.error.message,
+      });
+    }
+    setLoading(null);
   };
 
   return (
@@ -416,9 +440,24 @@ export function SettleClientView({
                               : "✅ Sudah Transfer"}
                           </button>
                         ) : (
-                          <span className="bg-[#f0edec] border-brutal-sm px-3 py-2 font-display text-[11px] font-bold uppercase inline-block text-[#7c775f]">
-                            Transfer oleh {memberNameMap[t.from]}
-                          </span>
+                          <div className="flex flex-col sm:flex-row items-end gap-2">
+                            {(t.to === currentMember.id ||
+                              currentMember.role === "owner") && (
+                              <button
+                                type="button"
+                                disabled={loading !== null}
+                                onClick={() => handleSendReminder(t)}
+                                className="btn-brutal bg-[#25D366] text-white px-3 py-2 font-display text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-[#20ba59] flex items-center gap-1.5 shadow-brutal"
+                              >
+                                {loading === `remind-${t.from}-${t.to}`
+                                  ? "Memproses..."
+                                  : "📢 Ingatkan via WA"}
+                              </button>
+                            )}
+                            <span className="bg-[#f0edec] border-brutal-sm px-3 py-2 font-display text-[11px] font-bold uppercase inline-block text-[#7c775f]">
+                              Transfer oleh {memberNameMap[t.from]}
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>

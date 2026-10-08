@@ -30,6 +30,26 @@ export const joinRateLimiter = redis
     })
   : null;
 
+// 10 attempts per minute for OG image recap generation
+export const imageOgRateLimiter = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(10, "60 s"),
+      analytics: true,
+      prefix: "ratelimit:image_og",
+    })
+  : null;
+
+// 30 requests per minute for public share links
+export const shareLinkRateLimiter = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(30, "60 s"),
+      analytics: true,
+      prefix: "ratelimit:share_link",
+    })
+  : null;
+
 export async function checkRateLimit(
   limiter: Ratelimit | null,
   identifier: string,

@@ -16,9 +16,18 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Privacy & indexing protection for public share links (/s/[token])
+  if (pathname.startsWith("/s/")) {
+    const response = NextResponse.next();
+    response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    response.headers.set("Cache-Control", "private, no-cache, no-store, must-revalidate");
+    return response;
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/groups/:path*"],
+  matcher: ["/groups/:path*", "/s/:path*"],
 };

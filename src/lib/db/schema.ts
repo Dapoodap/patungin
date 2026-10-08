@@ -9,6 +9,7 @@ import {
   timestamp,
   date,
   jsonb,
+  boolean,
   index,
   uniqueIndex,
   primaryKey,
@@ -38,6 +39,31 @@ export const paymentType = pgEnum("payment_type", [
   "qris",
   "other",
 ]);
+
+// Enum baru di v1.1
+export const splitMode = pgEnum("split_mode", [
+  "weight",
+  "percent",
+  "exact",
+  "items",
+]);
+export const adjustmentKind = pgEnum("adjustment_kind", [
+  "tax",
+  "service",
+  "tip",
+  "discount",
+]);
+export const adjustmentAllocation = pgEnum("adjustment_allocation", [
+  "proportional",
+  "equal",
+]);
+export const reminderChannel = pgEnum("reminder_channel", [
+  "whatsapp_link",
+  "email",
+  "push",
+]);
+export const reminderKind = pgEnum("reminder_kind", ["manual", "auto"]);
+export const auditSource = pgEnum("audit_source", ["user", "ai", "system"]);
 
 /* ---------- Helper ---------- */
 const tz = (name: string) =>
@@ -96,6 +122,7 @@ export const expenses = pgTable(
     amount: integer("amount").notNull(), // rupiah bulat
     spentAt: date("spent_at", { mode: "string" }).notNull(),
     note: text("note"),
+    splitMode: splitMode("split_mode").notNull().default("weight"),
     createdByMemberId: uuid("created_by_member_id")
       .notNull()
       .references(() => members.id, { onDelete: "restrict" }),
@@ -120,15 +147,78 @@ export const expenseSplits = pgTable(
     memberId: uuid("member_id")
       .notNull()
       .references(() => members.id, { onDelete: "restrict" }),
-    // drizzle mengembalikan numeric sebagai string; ubah ke number saat dibaca
-    weight: numeric("weight", { precision: 6, scale: 2 }).notNull().default("1"),
+    // input_value menggantikan weight di v1.1 (bobot, persen, atau rupiah pasti)
+    inputValue: numeric("input_value", { precision: 12, scale: 2 })
+      .notNull()
+      .default("1"),
     shareAmount: integer("share_amount").notNull(), // hasil alokasi largest remainder
   },
   (t) => [
     primaryKey({ columns: [t.expenseId, t.memberId] }),
-    check("splits_weight_pos", sql`${t.weight} > 0`),
+    check("splits_input_val_pos", sql`${t.inputValue} >= 0`),
     check("splits_share_nonneg", sql`${t.shareAmount} >= 0`),
     index("splits_member_idx").on(t.memberId),
+  ],
+);
+
+/* ---------- expense_items (v1.1) ---------- */
+export const expenseItems = pgTable(
+  "expense_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    expenseId: uuid("expense_id")
+      .notNull()
+      .references(() => expenses.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    amount: integer("amount").notNull(),
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [
+    check("expense_items_amount_pos", sql`${t.amount} > 0`),
+    index("expense_items_expense_idx").on(t.expenseId),
+  ],
+);
+
+/* ---------- expense_item_shares (v1.1) ---------- */
+export const expenseItemShares = pgTable(
+  "expense_item_shares",
+  {
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => expenseItems.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => members.id, { onDelete: "restrict" }),
+    inputValue: numeric("input_value", { precision: 12, scale: 2 })
+      .notNull()
+      .default("1"),
+    shareAmount: integer("share_amount").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.itemId, t.memberId] }),
+    check("item_shares_val_pos", sql`${t.inputValue} > 0`),
+    check("item_shares_amount_nonneg", sql`${t.shareAmount} >= 0`),
+    index("item_shares_member_idx").on(t.memberId),
+  ],
+);
+
+/* ---------- expense_adjustments (v1.1) ---------- */
+export const expenseAdjustments = pgTable(
+  "expense_adjustments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    expenseId: uuid("expense_id")
+      .notNull()
+      .references(() => expenses.id, { onDelete: "cascade" }),
+    kind: adjustmentKind("kind").notNull(),
+    amount: integer("amount").notNull(),
+    allocation: adjustmentAllocation("allocation")
+      .notNull()
+      .default("proportional"),
+  },
+  (t) => [
+    check("expense_adjustments_amount_pos", sql`${t.amount} > 0`),
+    index("expense_adjustments_expense_idx").on(t.expenseId),
   ],
 );
 
@@ -231,9 +321,74 @@ export const auditLogs = pgTable(
     entity: text("entity").notNull(),
     entityId: uuid("entity_id"),
     meta: jsonb("meta"),
+    source: auditSource("source").notNull().default("user"),
     createdAt: tz("created_at").notNull().defaultNow(),
   },
   (t) => [index("audit_group_time_idx").on(t.groupId, t.createdAt)],
+);
+
+/* ---------- share_links (v1.1) ---------- */
+export const shareLinks = pgTable(
+  "share_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: tz("expires_at").notNull(),
+    revokedAt: tz("revoked_at"),
+    showDetails: boolean("show_details").notNull().default(false),
+    viewCount: integer("view_count").notNull().default(0),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: tz("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("share_links_token_hash_uq").on(t.tokenHash),
+    index("share_links_group_idx").on(t.groupId),
+  ],
+);
+
+/* ---------- reminders (v1.1) ---------- */
+export const reminders = pgTable(
+  "reminders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    fromMemberId: uuid("from_member_id")
+      .notNull()
+      .references(() => members.id, { onDelete: "restrict" }),
+    toMemberId: uuid("to_member_id")
+      .notNull()
+      .references(() => members.id, { onDelete: "restrict" }),
+    channel: reminderChannel("channel").notNull(),
+    kind: reminderKind("kind").notNull(),
+    createdAt: tz("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("reminders_group_idx").on(t.groupId),
+    index("reminders_to_member_idx").on(t.toMemberId),
+    index("reminders_cooldown_idx").on(t.groupId, t.toMemberId, t.createdAt),
+  ],
+);
+
+/* ---------- notification_preferences (v1.1) ---------- */
+export const notificationPreferences = pgTable(
+  "notification_preferences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    emailEnabled: boolean("email_enabled").notNull().default(true),
+    pushEnabled: boolean("push_enabled").notNull().default(false),
+    updatedAt: tz("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("notification_pref_user_uq").on(t.userId)],
 );
 
 /* ---------- Relasi (untuk db.query.*) ---------- */
@@ -242,7 +397,38 @@ export const groupsRelations = relations(groups, ({ many }) => ({
   expenses: many(expenses),
   settlements: many(settlements),
   invites: many(invites),
+  shareLinks: many(shareLinks),
+  reminders: many(reminders),
 }));
+
+export const shareLinksRelations = relations(shareLinks, ({ one }) => ({
+  group: one(groups, { fields: [shareLinks.groupId], references: [groups.id] }),
+  creator: one(user, { fields: [shareLinks.createdBy], references: [user.id] }),
+}));
+
+export const remindersRelations = relations(reminders, ({ one }) => ({
+  group: one(groups, { fields: [reminders.groupId], references: [groups.id] }),
+  fromMember: one(members, {
+    fields: [reminders.fromMemberId],
+    references: [members.id],
+    relationName: "reminder_from",
+  }),
+  toMember: one(members, {
+    fields: [reminders.toMemberId],
+    references: [members.id],
+    relationName: "reminder_to",
+  }),
+}));
+
+export const notificationPreferencesRelations = relations(
+  notificationPreferences,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [notificationPreferences.userId],
+      references: [user.id],
+    }),
+  }),
+);
 
 export const membersRelations = relations(members, ({ one, many }) => ({
   group: one(groups, { fields: [members.groupId], references: [groups.id] }),
@@ -257,7 +443,41 @@ export const expensesRelations = relations(expenses, ({ one, many }) => ({
     references: [members.id],
   }),
   splits: many(expenseSplits),
+  items: many(expenseItems),
+  adjustments: many(expenseAdjustments),
 }));
+
+export const expenseItemsRelations = relations(expenseItems, ({ one, many }) => ({
+  expense: one(expenses, {
+    fields: [expenseItems.expenseId],
+    references: [expenses.id],
+  }),
+  shares: many(expenseItemShares),
+}));
+
+export const expenseItemSharesRelations = relations(
+  expenseItemShares,
+  ({ one }) => ({
+    item: one(expenseItems, {
+      fields: [expenseItemShares.itemId],
+      references: [expenseItems.id],
+    }),
+    member: one(members, {
+      fields: [expenseItemShares.memberId],
+      references: [members.id],
+    }),
+  }),
+);
+
+export const expenseAdjustmentsRelations = relations(
+  expenseAdjustments,
+  ({ one }) => ({
+    expense: one(expenses, {
+      fields: [expenseAdjustments.expenseId],
+      references: [expenses.id],
+    }),
+  }),
+);
 
 export const splitsRelations = relations(expenseSplits, ({ one }) => ({
   expense: one(expenses, {

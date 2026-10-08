@@ -14,7 +14,8 @@ interface Member {
 
 interface Split {
   memberId: string;
-  weight: string;
+  inputValue?: string;
+  weight?: string;
   shareAmount: number;
 }
 
@@ -24,6 +25,7 @@ interface Expense {
   category: string;
   amount: number;
   spentAt: string;
+  splitMode?: "weight" | "percent" | "exact" | "items";
   note: string | null;
   createdByMemberId: string;
   payerMemberId: string;
@@ -200,6 +202,15 @@ export function ExpensesClientView({
                           <span className="bg-[#f0edec] px-1.5 py-0.5 border-brutal-sm font-display text-[10px] font-bold uppercase">
                             {e.category}
                           </span>
+                          {e.splitMode && e.splitMode !== "weight" && (
+                            <span className="bg-[#FFE600] px-1.5 py-0.5 border-brutal-sm font-display text-[10px] font-bold uppercase">
+                              {e.splitMode === "percent"
+                                ? "% Persen"
+                                : e.splitMode === "items"
+                                  ? "🧾 Struk"
+                                  : "Rp Pas"}
+                            </span>
+                          )}
                         </div>
 
                         <p className="font-sans text-xs text-[#7c775f]">
@@ -268,7 +279,11 @@ export function ExpensesClientView({
                                 </span>
                                 <div className="flex items-center gap-2">
                                   <span className="font-sans text-[10px] text-[#7c775f]">
-                                    ×{parseFloat(s.weight)}
+                                    {e.splitMode === "percent"
+                                      ? `${parseFloat(s.inputValue || "0")}%`
+                                      : e.splitMode === "exact"
+                                        ? formatRupiah(parseInt(s.inputValue || "0", 10))
+                                        : `×${parseFloat(s.inputValue || s.weight || "1")}`}
                                   </span>
                                   <span className="font-display text-xs font-bold">
                                     {formatRupiah(s.shareAmount)}

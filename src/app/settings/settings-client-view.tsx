@@ -8,6 +8,7 @@ import {
   addPaymentMethodForUser,
   deletePaymentMethod,
 } from "@/app/actions/payment-method";
+import { updateEmailReminderPreference } from "@/app/actions/notification-preference";
 
 interface PaymentMethod {
   id: string;
@@ -50,11 +51,17 @@ const TYPE_OPTIONS = [
 export function SettingsClientView({
   user,
   memberships,
+  emailEnabled = true,
 }: {
   user: UserInfo;
   memberships: Membership[];
+  emailEnabled?: boolean;
 }) {
   const router = useRouter();
+
+  // Notification preferences state
+  const [emailNotif, setEmailNotif] = useState(emailEnabled);
+  const [updatingNotif, setUpdatingNotif] = useState(false);
 
   // Add payment method form state
   const [type, setType] = useState<
@@ -70,6 +77,25 @@ export function SettingsClientView({
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const handleToggleEmailNotif = async (nextVal: boolean) => {
+    setEmailNotif(nextVal);
+    setUpdatingNotif(true);
+    const res = await updateEmailReminderPreference(nextVal);
+    if (!res.ok) {
+      setEmailNotif(!nextVal); // rollback
+      setStatusMsg({ type: "error", text: res.error.message });
+    } else {
+      setStatusMsg({
+        type: "success",
+        text: nextVal
+          ? "Pengingat pelunasan via email berhasil diaktifkan."
+          : "Pengingat pelunasan via email dinonaktifkan.",
+      });
+      router.refresh();
+    }
+    setUpdatingNotif(false);
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,6 +229,42 @@ export function SettingsClientView({
                 </span>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Notification Preferences Card (FR-32, v1.1) */}
+        <div className="bg-white border-brutal shadow-brutal p-5 sm:p-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                🔔 Preferensi Pengingat Tagihan
+              </h2>
+              <p className="font-sans text-xs text-[#4b4731] mt-0.5">
+                Pengingat email otomatis untuk tagihan patungan yang belum selesai dibayar (dibatasi jeda wajib 24 jam).
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={emailNotif}
+                disabled={updatingNotif}
+                onChange={(e) => handleToggleEmailNotif(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-neutral-200 peer-focus:outline-none border-2 border-[#121212] peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#121212] after:border-2 after:h-5 after:w-5 after:transition-all peer-checked:bg-[#00F090]"></div>
+            </label>
+          </div>
+          <div className="text-[11px] font-sans text-neutral-500 pt-1 border-t border-neutral-200 flex items-center gap-2">
+            <span>Status:</span>
+            <span
+              className={`font-bold ${
+                emailNotif ? "text-emerald-700" : "text-neutral-500"
+              }`}
+            >
+              {emailNotif
+                ? "✓ Aktif — Anda akan menerima ringkasan jika memiliki tagihan"
+                : "✕ Nonaktif — Pengingat email otomatis dimatikan"}
+            </span>
           </div>
         </div>
 

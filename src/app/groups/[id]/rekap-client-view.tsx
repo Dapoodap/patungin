@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatRupiah } from "@/lib/money";
 import { ExpenseFormModal } from "./expenses/expense-form-modal";
+import { ShareRecapModal } from "./share-recap-modal";
 import { deleteExpense } from "@/app/actions/expense";
 import { useRouter } from "next/navigation";
 
@@ -14,7 +15,8 @@ interface Member {
 
 interface Split {
   memberId: string;
-  weight: string;
+  inputValue?: string;
+  weight?: string;
   shareAmount: number;
 }
 
@@ -39,6 +41,7 @@ interface Transfer {
 
 export function RekapClientView({
   groupId,
+  groupName = "Grup Patungan",
   currentMember,
   members,
   expenses,
@@ -51,6 +54,7 @@ export function RekapClientView({
   isBalanced,
 }: {
   groupId: string;
+  groupName?: string;
   currentMember: Member;
   members: Member[];
   expenses: Expense[];
@@ -64,6 +68,7 @@ export function RekapClientView({
 }) {
   const router = useRouter();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterPerson, setFilterPerson] = useState<string>("all");
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -138,13 +143,22 @@ export function RekapClientView({
                 {isBalanced ? "Saldo Seimbang (Sum = 0)" : "Cek Data (Selisih Ada)"}
               </span>
             </div>
-            <button
-              onClick={() => setShowAddModal(true)}
-              type="button"
-              className="btn-brutal bg-[#00F090] text-[#121212] px-3 py-1 font-bold uppercase text-[11px] cursor-pointer"
-            >
-              ➕ Catat Baru
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowShareModal(true)}
+                type="button"
+                className="btn-brutal bg-[#FFE600] text-[#121212] px-3 py-1 font-bold uppercase text-[11px] cursor-pointer flex items-center gap-1 shadow-brutal-xs hover:bg-[#ffe033]"
+              >
+                <span>📢</span> Bagikan Rekap
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                type="button"
+                className="btn-brutal bg-[#00F090] text-[#121212] px-3 py-1 font-bold uppercase text-[11px] cursor-pointer"
+              >
+                ➕ Catat Baru
+              </button>
+            </div>
           </div>
         </div>
 
@@ -459,6 +473,19 @@ export function RekapClientView({
           onClose={() => setShowAddModal(false)}
         />
       )}
+
+      {/* Modal Bagikan Rekap */}
+      <ShareRecapModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        groupId={groupId}
+        groupName={groupName}
+        totalExpenses={totalExpense}
+        members={members}
+        balances={balances}
+        transfers={transfers}
+        isOwner={currentMember.role === "owner"}
+      />
     </div>
   );
 }

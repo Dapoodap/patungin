@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { alloc } from "./alloc";
+import { allocPercent } from "./percent";
+import { allocExact } from "./exact";
+import { allocItems } from "./items";
+import type { ItemInput, AdjustmentInput } from "./items";
 import { computeBalances } from "./balances";
 import type { ExpenseInput, SettlementInput } from "./balances";
 import { settle } from "./settle";
@@ -442,3 +446,216 @@ describe("Property-based tests", () => {
     );
   });
 });
+
+/* ==========================================================================
+ * v1.1 Multi-Mode Split Tests: allocPercent & allocExact
+ * ========================================================================== */
+
+describe("allocPercent", () => {
+  it("Data Uji 1: Golden test percentage 50%, 30%, 20% on Rp100.000", () => {
+    const res = allocPercent(100000, {
+      daffa: 50.0,
+      kiki: 30.0,
+      rakya: 20.0,
+    });
+    expect(res).toEqual({
+      daffa: 50000,
+      kiki: 30000,
+      rakya: 20000,
+    });
+    expect(sum(res)).toBe(100000);
+  });
+
+  it("Data Uji 2: Golden test 3-way decimal percentages (33.34%, 33.33%, 33.33%) on Rp100.000", () => {
+    const res = allocPercent(100000, {
+      daffa: 33.34,
+      kiki: 33.33,
+      rakya: 33.33,
+    });
+    expect(res).toEqual({
+      daffa: 33340,
+      kiki: 33330,
+      rakya: 33330,
+    });
+    expect(sum(res)).toBe(100000);
+  });
+
+  it("rejects when percentages do not sum to 100.00%", () => {
+    expect(() =>
+      allocPercent(100000, { daffa: 50, kiki: 40 }),
+    ).toThrow(/Total persentase harus tepat 100,00%/);
+
+    expect(() =>
+      allocPercent(100000, { daffa: 50, kiki: 60 }),
+    ).toThrow(/Total persentase harus tepat 100,00%/);
+  });
+
+  it("property test: sum(allocPercent) is always equal to amount", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 100, max: 10000000 }),
+        fc.integer({ min: 1, max: 99 }),
+        (amount, p1) => {
+          const p2 = 100 - p1;
+          const shares = allocPercent(amount, { a: p1, b: p2 });
+          expect(sum(shares)).toBe(amount);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+});
+
+describe("allocExact", () => {
+  it("Data Uji 3: Golden test exact manual nominal Rp150.000 (75k, 50k, 25k)", () => {
+    const res = allocExact(150000, {
+      daffa: 75000,
+      kiki: 50000,
+      rakya: 25000,
+    });
+    expect(res).toEqual({
+      daffa: 75000,
+      kiki: 50000,
+      rakya: 25000,
+    });
+    expect(sum(res)).toBe(150000);
+  });
+
+  it("rejects when exact amounts do not match total amount", () => {
+    expect(() =>
+      allocExact(150000, { daffa: 75000, kiki: 50000, rakya: 20000 }),
+    ).toThrow(/Total rincian .* harus sama dengan nominal pengeluaran/);
+
+    expect(() =>
+      allocExact(100000, { daffa: 60000, kiki: 60000 }),
+    ).toThrow(/Total rincian .* harus sama dengan nominal pengeluaran/);
+  });
+
+  it("rejects negative or fractional values", () => {
+    expect(() =>
+      allocExact(100000, { daffa: -10000, kiki: 110000 }),
+    ).toThrow(/harus integer >= 0/);
+
+    expect(() =>
+      allocExact(100, { daffa: 50.5, kiki: 49.5 }),
+    ).toThrow(/harus integer >= 0/);
+  });
+
+  it("property test: exact values preserve sum", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1, max: 500000 }),
+        fc.integer({ min: 1, max: 500000 }),
+        (a1, a2) => {
+          const total = a1 + a2;
+          const shares = allocExact(total, { m1: a1, m2: a2 });
+          expect(sum(shares)).toBe(total);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+});
+
+describe("allocItems", () => {
+  it("Data Uji 4: Golden test struk restoran Rp129.860 dengan service, PPN 11%, dan diskon", () => {
+    const items: ItemInput[] = [
+      {
+        name: "Nasi Goreng Special",
+        amount: 45000,
+        shares: { daffa: 1, kiki: 1 },
+      },
+      {
+        name: "Es Teh Manis",
+        amount: 15000,
+        shares: { kiki: 1, rakya: 1 },
+      },
+      {
+        name: "Ayam Bakar",
+        amount: 60000,
+        shares: { daffa: 1, rakya: 2 },
+      },
+    ];
+
+    const adjustments: AdjustmentInput[] = [
+      {
+        kind: "service",
+        amount: 6000,
+        allocation: "proportional",
+      },
+      {
+        kind: "tax",
+        amount: 13860,
+        allocation: "proportional",
+      },
+      {
+        kind: "discount",
+        amount: 10000,
+        allocation: "equal",
+      },
+    ];
+
+    const members = ["daffa", "kiki", "rakya"];
+    const res = allocItems(items, adjustments, members);
+
+    // Verifikasi hasil tiap orang sesuai spesifikasi Technical Design & PRD
+    expect(res.daffa).toBe(46200);
+    expect(res.kiki).toBe(31632);
+    expect(res.rakya).toBe(52028);
+
+    // Invarian: total bersih harus tepat sama dengan grand total struk (Rp129.860)
+    const grandTotal = 120000 + 6000 + 13860 - 10000;
+    expect(sum(res)).toBe(grandTotal);
+    expect(grandTotal).toBe(129860);
+  });
+
+  it("throws when receipt items list is empty", () => {
+    expect(() => allocItems([], [], ["daffa", "kiki"])).toThrow(
+      "Daftar item struk tidak boleh kosong",
+    );
+  });
+
+  it("throws when item amount is invalid or non-integer", () => {
+    expect(() =>
+      allocItems(
+        [{ name: "Kopi", amount: -5000, shares: { daffa: 1 } }],
+        [],
+        ["daffa"],
+      ),
+    ).toThrow(/harus integer > 0/);
+
+    expect(() =>
+      allocItems(
+        [{ name: "Kopi", amount: 12500.5, shares: { daffa: 1 } }],
+        [],
+        ["daffa"],
+      ),
+    ).toThrow(/harus integer > 0/);
+  });
+
+  it("property test: receipt sum invariant holds for arbitrary valid items and adjustments", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 1000, max: 100000 }),
+        fc.integer({ min: 1000, max: 100000 }),
+        fc.integer({ min: 0, max: 20000 }),
+        fc.integer({ min: 0, max: 20000 }),
+        (item1, item2, tax, disc) => {
+          const items: ItemInput[] = [
+            { name: "Item 1", amount: item1, shares: { a: 1, b: 2 } },
+            { name: "Item 2", amount: item2, shares: { b: 1, c: 1 } },
+          ];
+          const adjustments: AdjustmentInput[] = [
+            { kind: "tax", amount: tax, allocation: "proportional" },
+            { kind: "discount", amount: disc, allocation: "equal" },
+          ];
+          const res = allocItems(items, adjustments, ["a", "b", "c"]);
+          const expectedGrandTotal = item1 + item2 + tax - disc;
+          expect(sum(res)).toBe(expectedGrandTotal);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  });
+});
+

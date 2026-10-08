@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { requireUser } from "@/lib/authz";
 import { db } from "@/lib/db";
-import { members } from "@/lib/db/schema";
+import { members, notificationPreferences } from "@/lib/db/schema";
 import { SettingsClientView } from "./settings-client-view";
 
 export default async function SettingsPage() {
@@ -19,10 +19,17 @@ export default async function SettingsPage() {
     },
   });
 
+  const pref = await db.query.notificationPreferences.findFirst({
+    where: eq(notificationPreferences.userId, session.user.id),
+  });
+
+  const emailEnabled = pref ? pref.emailEnabled : true;
+
   return (
     <SettingsClientView
       user={session.user}
       memberships={userMemberships}
+      emailEnabled={emailEnabled}
     />
   );
 }
