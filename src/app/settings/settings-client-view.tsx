@@ -240,7 +240,7 @@ export function SettingsClientView({
                 🔔 Preferensi Pengingat Tagihan
               </h2>
               <p className="font-sans text-xs text-[#4b4731] mt-0.5">
-                Pengingat email otomatis untuk tagihan patungan yang belum selesai dibayar (dibatasi jeda wajib 24 jam).
+                Pengingat email otomatis untuk tagihan patungan yang belum selesai dibayar (dikirim seminggu sekali).
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">

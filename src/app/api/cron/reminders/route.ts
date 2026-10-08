@@ -24,18 +24,44 @@ export async function GET(request: NextRequest) {
   const expectedSecret = process.env.CRON_SECRET;
   const isDev = process.env.NODE_ENV === "development";
 
-  if (!isDev) {
-    if (!expectedSecret || authHeader !== `Bearer ${expectedSecret}`) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
-  } else if (expectedSecret && authHeader !== `Bearer ${expectedSecret}`) {
+  const url = new URL(request.url);
+  const querySecret = url.searchParams.get("secret");
+
+  const isAuthorized =
+    (expectedSecret && authHeader === `Bearer ${expectedSecret}`) ||
+    (expectedSecret && querySecret === expectedSecret) ||
+    isDev; // Allow browser access in local development
+
+  if (!isAuthorized) {
     return NextResponse.json(
-      { error: "Unauthorized" },
+      {
+        error: "Unauthorized",
+        message:
+          "Sertakan header Authorization: Bearer <CRON_SECRET> atau parameter ?secret=<CRON_SECRET> di URL.",
+      },
       { status: 401 },
     );
+  }
+
+  // 1b. Instant Test Email Mode: ?test_email=kamu@gmail.com
+  const testEmailTarget = url.searchParams.get("test_email");
+  if (testEmailTarget) {
+    const testResult = await sendReminderEmail({
+      toEmail: testEmailTarget,
+      debtorName: "Teman Patungan (Test)",
+      creditorName: "Kamu (Test)",
+      groupName: "Uji Coba Pengingat Email",
+      amount: 50000,
+      paymentMethodText: "BCA 123456789 a.n. Demo",
+      settleUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/groups`,
+    });
+
+    return NextResponse.json({
+      testMode: true,
+      targetEmail: testEmailTarget,
+      result: testResult,
+      apiKeyConfigured: Boolean(process.env.RESEND_API_KEY),
+    });
   }
 
   try {
@@ -50,6 +76,14 @@ export async function GET(request: NextRequest) {
     let skippedPending = 0;
     let totalSent = 0;
     const maxEmailsPerRun = 50; // Spec 8.4 batch limit
+    const deliveries: Array<{
+      toEmail: string;
+      debtor: string;
+      amount: number;
+      success: boolean;
+      resendId?: string;
+      error?: string;
+    }> = [];
     const appBaseUrl =
       process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
@@ -146,11 +180,14 @@ export async function GET(request: NextRequest) {
           continue; // User opted out of email reminders
         }
 
-        // Check 24-hour cooldown
-        const cooldown = await checkReminderCooldown(group.id, debtor.id);
-        if (!cooldown.canSend) {
-          skippedCooldown++;
-          continue;
+        // Check 24-hour cooldown (can be bypassed in development with ?force=true)
+        const forceCooldown = isDev && url.searchParams.get("force") === "true";
+        if (!forceCooldown) {
+          const cooldown = await checkReminderCooldown(group.id, debtor.id);
+          if (!cooldown.canSend) {
+            skippedCooldown++;
+            continue;
+          }
         }
 
         // Fetch creditor's payment method if available
@@ -173,7 +210,7 @@ export async function GET(request: NextRequest) {
         });
 
         // Trigger email delivery
-        await sendReminderEmail({
+        const sendRes = await sendReminderEmail({
           toEmail: debtor.user.email,
           debtorName: debtor.displayName,
           creditorName: creditor.displayName,
@@ -183,7 +220,18 @@ export async function GET(request: NextRequest) {
           settleUrl: `${appBaseUrl}/groups/${group.id}/settle`,
         });
 
-        totalSent++;
+        deliveries.push({
+          toEmail: debtor.user.email,
+          debtor: debtor.displayName,
+          amount: transfer.amount,
+          success: sendRes.success,
+          resendId: sendRes.id,
+          error: sendRes.error,
+        });
+
+        if (sendRes.success) {
+          totalSent++;
+        }
       }
     }
 
@@ -195,6 +243,7 @@ export async function GET(request: NextRequest) {
       skippedCooldown,
       skippedPending,
       sent: totalSent,
+      deliveries,
     });
   } catch (err: unknown) {
     console.error("Cron reminders error:", err);

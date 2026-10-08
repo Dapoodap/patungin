@@ -390,7 +390,7 @@ export async function GET(
             color: "#444444",
           }}
         >
-          <span>patungin.com • Split bill Indonesia tanpa drama</span>
+          <span>patungin.my.id • Split bill Indonesia tanpa drama</span>
           <span style={{ backgroundColor: "#111111", color: "#FFFDF5", padding: "3px 8px" }}>
             REKAP RESMI
           </span>

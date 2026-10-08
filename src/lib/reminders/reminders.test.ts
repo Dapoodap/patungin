@@ -15,14 +15,14 @@ describe("Reminders & Cooldown Logic", () => {
       groupName: "Makan Malam",
       amount: 45000,
       paymentMethodText: "BCA 123456789 a.n. Daffa",
-      appUrl: "https://patungin.com/groups/g1/settle",
+      appUrl: "https://patungin.my.id/groups/g1/settle",
     });
 
     expect(res.message).toContain("Halo Kiki!");
     expect(res.message).toContain("Makan Malam");
     expect(res.message).toContain("Rp 45.000");
     expect(res.message).toContain("BCA 123456789 a.n. Daffa");
-    expect(res.message).toContain("https://patungin.com/groups/g1/settle");
+    expect(res.message).toContain("https://patungin.my.id/groups/g1/settle");
     expect(res.waUrl).toMatch(/^https:\/\/wa\.me\/\?text=/);
     expect(res.waUrl).toContain(encodeURIComponent("Rp 45.000"));
   });

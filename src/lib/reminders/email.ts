@@ -29,7 +29,7 @@ export async function sendReminderEmail(
 
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail =
-    process.env.EMAIL_FROM || "Patungan <noreply@patungin.com>";
+    process.env.EMAIL_FROM || "Patungan <noreply@patungin.my.id>";
 
   const subject = `Pengingat Pelunasan Tagihan: ${groupName} (${formatRupiah(amount)})`;
 
